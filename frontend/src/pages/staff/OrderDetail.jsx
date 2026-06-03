@@ -256,6 +256,12 @@ export default function OrderDetail({ designerView = false }) {
                       <span className="font-semibold">{v || '—'}</span>
                     </div>
                   ))}
+                  {order.notes && (
+                    <div style={{ marginTop: 12, padding: 12, background: 'var(--color-surface-2)', borderRadius: 'var(--radius-sm)', borderLeft: '3px solid var(--color-warning)' }}>
+                      <div className="text-xs text-muted font-bold" style={{ textTransform: 'uppercase', marginBottom: 4 }}>Special Instructions</div>
+                      <div className="text-sm font-medium" style={{ whiteSpace: 'pre-wrap' }}>{order.notes}</div>
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -8,8 +8,8 @@ export const pricingRouter = Router()
 // Computes order price from job specs — server-side to prevent client-side manipulation
 pricingRouter.post('/calculate', requireAuth, async (req, res, next) => {
   try {
-    const { jobType, materialType, width, height, quantity } = req.body
-    const total_cost = await calculatePrice({ jobType, materialType, width, height, quantity })
+    const { jobType, materialType, width, height, quantity, needsLayout } = req.body
+    const total_cost = await calculatePrice({ jobType, materialType, width, height, quantity, needsLayout })
     res.json({ total_cost })
   } catch (err) {
     next(err)

@@ -19,7 +19,7 @@ ordersRouter.post('/', requireAuth, requireRole('staff', 'manager'), upload.sing
       customerName, contactNumber, email, existingCustomerId,
       jobType, dimensions, width, height, materialType, quantity,
       paymentType, paymentMethod, paymentAmount, ewalletRef,
-      estimatedPickupDate, notes, filePending
+      estimatedPickupDate, notes, filePending, needsLayout
     } = req.body
 
     // Validate required fields
@@ -68,12 +68,15 @@ ordersRouter.post('/', requireAuth, requireRole('staff', 'manager'), upload.sing
       checksum = createHash('sha256').update(fileBuffer).digest('hex')
     }
 
+    const parsedNeedsLayout = needsLayout === 'true' || needsLayout === true
+
     // Compute price server-side
     const totalCost = await calculatePrice({
       jobType, materialType,
       width: parsedWidth,
       height: parsedHeight,
-      quantity: parsedQuantity
+      quantity: parsedQuantity,
+      needsLayout: parsedNeedsLayout
     })
 
     if (totalCost >= 100000000) {
@@ -115,7 +118,7 @@ ordersRouter.post('/', requireAuth, requireRole('staff', 'manager'), upload.sing
         customer_id: customerId,
         created_by: req.user.id,
         job_type: jobType,
-        dimensions: dimensions || `${parsedWidth}m × ${parsedHeight}m`,
+        dimensions: dimensions || `${parsedWidth}ft × ${parsedHeight}ft`,
         width_m: parsedWidth,
         height_m: parsedHeight,
         material_type: materialType,
@@ -126,7 +129,9 @@ ordersRouter.post('/', requireAuth, requireRole('staff', 'manager'), upload.sing
         payment_status: payStatus,
         status: 'received',
         estimated_pickup_date: estimatedPickupDate || null,
-        notes: notes || null,
+        notes: parsedNeedsLayout 
+          ? `[Needs layout design (+₱180.00)]${notes ? '\n' + notes : ''}`
+          : (notes || null),
       })
       .select('*')
       .single()

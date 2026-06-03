@@ -34,6 +34,7 @@ export default function NewOrder() {
     ewalletRef: '',
     estimatedPickupDate: format(addDays(new Date(), 3), 'yyyy-MM-dd'),
     notes: '',
+    needsLayout: false,
   })
   const [file, setFile] = useState(null)
   const [computedPrice, setComputedPrice] = useState(null)
@@ -67,7 +68,7 @@ export default function NewOrder() {
 
   // Calculate price when specs change
   useEffect(() => {
-    const { jobType, materialType, width, height, quantity } = form
+    const { jobType, materialType, width, height, quantity, needsLayout } = form
     if (!jobType || !materialType || !width || !height || !quantity) {
       setComputedPrice(null)
       setPriceError(null)
@@ -82,6 +83,7 @@ export default function NewOrder() {
           width: parseFloat(width),
           height: parseFloat(height),
           quantity: parseInt(quantity),
+          needsLayout,
         })
         setComputedPrice(data.total_cost)
       } catch (err) {
@@ -92,7 +94,7 @@ export default function NewOrder() {
       }
     }, 600)
     return () => clearTimeout(timer)
-  }, [form.jobType, form.materialType, form.width, form.height, form.quantity])
+  }, [form.jobType, form.materialType, form.width, form.height, form.quantity, form.needsLayout])
 
   function validate() {
     const e = {}
@@ -109,7 +111,7 @@ export default function NewOrder() {
     if (computedPrice !== null && parseFloat(form.paymentAmount) > computedPrice) {
       e.paymentAmount = `Amount entered exceeds the outstanding balance of ₱${computedPrice.toFixed(2)}. Please enter a valid amount.`
     }
-    if (!file) e.file = 'Please attach a layout file or mark as "File to be submitted later"'
+    if (!file && !form.needsLayout) e.file = 'Please attach a layout file or mark as "File to be submitted later"'
     if (!form.estimatedPickupDate) e.estimatedPickupDate = 'Estimated pickup date is required'
     if (form.paymentMethod === 'ewallet' && !form.ewalletRef.trim()) e.ewalletRef = 'E-wallet reference number is required'
     return e
@@ -135,7 +137,7 @@ export default function NewOrder() {
       fd.append('email', form.email.trim())
       fd.append('existingCustomerId', existingCustomer?.id || '')
       fd.append('jobType', form.jobType)
-      fd.append('dimensions', `${form.width}m × ${form.height}m`)
+      fd.append('dimensions', `${form.width}ft × ${form.height}ft`)
       fd.append('width', form.width)
       fd.append('height', form.height)
       fd.append('materialType', form.materialType)
@@ -149,6 +151,7 @@ export default function NewOrder() {
       fd.append('notes', form.notes)
       if (file && file !== 'pending') fd.append('file', file)
       fd.append('filePending', file === 'pending' ? 'true' : 'false')
+      fd.append('needsLayout', form.needsLayout ? 'true' : 'false')
 
       const { data } = await api.post('/api/orders', fd, {
         headers: { 'Content-Type': 'multipart/form-data' }
@@ -282,25 +285,25 @@ export default function NewOrder() {
                 <div className="form-section-title">Dimensions &amp; Quantity</div>
                 <div className="form-row-3">
                   <div className="form-group">
-                    <label className="form-label required" htmlFor="width">Width (meters)</label>
+                    <label className="form-label required" htmlFor="width">Width (feet)</label>
                     <input
                       id="width"
                       type="number"
                       min="0.01" step="0.01"
                       className={`form-input ${errors.dimensions ? 'error' : ''}`}
-                      placeholder="e.g. 1.2"
+                      placeholder="e.g. 2"
                       value={form.width}
                       onChange={e => setField('width', e.target.value)}
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label required" htmlFor="height">Height (meters)</label>
+                    <label className="form-label required" htmlFor="height">Height (feet)</label>
                     <input
                       id="height"
                       type="number"
                       min="0.01" step="0.01"
                       className={`form-input ${errors.dimensions ? 'error' : ''}`}
-                      placeholder="e.g. 2.4"
+                      placeholder="e.g. 3"
                       value={form.height}
                       onChange={e => setField('height', e.target.value)}
                     />
@@ -350,6 +353,19 @@ export default function NewOrder() {
                       </span>
                     )}
                   </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, marginBottom: 12 }}>
+                  <input
+                    type="checkbox"
+                    id="needs-layout"
+                    checked={form.needsLayout}
+                    onChange={(e) => setField('needsLayout', e.target.checked)}
+                    style={{ width: 18, height: 18, accentColor: 'var(--color-primary)', cursor: 'pointer' }}
+                  />
+                  <label htmlFor="needs-layout" className="text-sm font-semibold" style={{ cursor: 'pointer', color: 'var(--color-text)' }}>
+                    No layout provided / Need layout creation (+₱180.00 flat fee)
+                  </label>
                 </div>
 
                 <div className="form-group">
