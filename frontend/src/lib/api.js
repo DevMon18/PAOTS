@@ -1,7 +1,10 @@
 import axios from 'axios'
 import { supabase } from './supabase'
 
-const baseURL = import.meta.env.VITE_API_URL || '/api'
+const isLocalhost = typeof window !== 'undefined' && 
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '[::1]')
+
+const baseURL = (isLocalhost ? import.meta.env.VITE_API_URL : null) || '/api'
 
 const api = axios.create({ baseURL })
 
