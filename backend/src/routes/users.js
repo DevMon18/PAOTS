@@ -59,23 +59,33 @@ usersRouter.post('/', requireAuth, requireRole('manager'), async (req, res, next
   }
 })
 
-// PATCH /api/users/:id — update a user profile or reset password
-usersRouter.patch('/:id', requireAuth, requireRole('manager'), async (req, res, next) => {
+// PATCH /api/users/:id — update a user profile or change password
+usersRouter.patch('/:id', requireAuth, async (req, res, next) => {
   try {
     const { id } = req.params
     const { username, role, isActive, password } = req.body
 
-    if (id === req.user.id) {
+    const isSelf = id === req.user.id
+    const isManager = req.userRole === 'manager'
+
+    if (!isSelf && !isManager) {
+      throw Object.assign(new Error('You are not authorized to update this profile.'), { status: 403 })
+    }
+
+    if (isSelf) {
       if (isActive === false) {
         throw Object.assign(new Error('You cannot deactivate your own account.'), { status: 400 })
       }
-      if (role && role !== 'manager') {
-        throw Object.assign(new Error('You cannot change your own role from manager.'), { status: 400 })
+      if (role && role !== req.userRole) {
+        throw Object.assign(new Error('You cannot change your own role.'), { status: 400 })
       }
     }
 
-    // Update password via Auth Admin if provided
+    // Update password via Auth Admin if provided — ONLY ALLOWED FOR SELF
     if (password && password.trim()) {
+      if (!isSelf) {
+        throw Object.assign(new Error('Only the user themselves can change their own password.'), { status: 403 })
+      }
       if (password.length < 8) {
         throw Object.assign(new Error('Password must be at least 8 characters.'), { status: 422 })
       }
@@ -85,11 +95,14 @@ usersRouter.patch('/:id', requireAuth, requireRole('manager'), async (req, res, 
       if (authErr) throw Object.assign(new Error(authErr.message), { status: 422 })
     }
 
-    // Update users table details
+    // Update users table details (non-managers can only update their own username)
     const updateData = {}
     if (username !== undefined) updateData.username = username.trim()
-    if (role !== undefined) updateData.role = role
-    if (isActive !== undefined) updateData.is_active = isActive
+    
+    if (isManager) {
+      if (role !== undefined) updateData.role = role
+      if (isActive !== undefined) updateData.is_active = isActive
+    }
 
     if (Object.keys(updateData).length > 0) {
       const { error: profileErr } = await supabase

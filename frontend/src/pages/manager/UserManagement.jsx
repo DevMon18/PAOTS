@@ -234,10 +234,12 @@ export default function UserManagement() {
                   <label className="form-label required">Username</label>
                   <input type="text" className="form-input" value={editForm.username} onChange={e => setEditForm(f => ({ ...f, username: e.target.value }))} required />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">New Password (leave blank to keep current)</label>
-                  <input type="password" className="form-input" placeholder="Min. 8 characters" value={editForm.password} onChange={e => setEditForm(f => ({ ...f, password: e.target.value }))} minLength={8} />
-                </div>
+                {editForm.id === currentUser?.id && (
+                  <div className="form-group">
+                    <label className="form-label">New Password (leave blank to keep current)</label>
+                    <input type="password" className="form-input" placeholder="Min. 8 characters" value={editForm.password} onChange={e => setEditForm(f => ({ ...f, password: e.target.value }))} minLength={8} />
+                  </div>
+                )}
                 <div className="form-group">
                   <label className="form-label required">Role</label>
                   <select className="form-select" value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}>
