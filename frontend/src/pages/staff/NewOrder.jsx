@@ -7,8 +7,8 @@ import api from '../../lib/api'
 import { useAuth } from '../../contexts/AuthContext'
 import { format, addDays } from 'date-fns'
 
-const JOB_TYPES = ['Tarpaulin', 'Jersey', 'Intra-board', 'Sticker', 'Sintra Board', 'One-Way Vision', 'Canvas Print', 'Other']
-const MATERIAL_TYPES = ['Standard', 'Premium', 'Backlit', 'Matte', 'Glossy', 'Fabric']
+const JOB_TYPES = ['Tarpaulin', 'Jersey', 'Clear sticker', 'Outdoor Sticker', 'UV Tarp', 'UV Stickers']
+const MATERIAL_TYPES = ['Sintra Board', 'Glossy Sticker', 'Matte sticker', 'Polydex', 'Back print', 'Premium', 'Standard']
 const PAYMENT_METHODS = [{ value: 'cash', label: 'Cash' }, { value: 'ewallet', label: 'E-wallet' }]
 
 export default function NewOrder() {
@@ -69,7 +69,8 @@ export default function NewOrder() {
   // Calculate price when specs change
   useEffect(() => {
     const { jobType, materialType, width, height, quantity, needsLayout } = form
-    if (!jobType || !materialType || !width || !height || !quantity) {
+    const isJersey = jobType === 'Jersey'
+    if (!jobType || !materialType || (!isJersey && (!width || !height)) || !quantity) {
       setComputedPrice(null)
       setPriceError(null)
       return
@@ -80,8 +81,8 @@ export default function NewOrder() {
       try {
         const { data } = await api.post('/api/pricing/calculate', {
           jobType, materialType,
-          width: parseFloat(width),
-          height: parseFloat(height),
+          width: isJersey ? 1 : parseFloat(width),
+          height: isJersey ? 1 : parseFloat(height),
           quantity: parseInt(quantity),
           needsLayout,
         })
@@ -102,7 +103,9 @@ export default function NewOrder() {
     if (!form.contactNumber.trim()) e.contactNumber = 'Contact number is required'
     if (!form.jobType) e.jobType = 'Job type is required'
     if (!form.materialType) e.materialType = 'Material type is required'
-    if (!form.width || !form.height) e.dimensions = 'Width and height are required'
+    if (form.jobType !== 'Jersey' && (!form.width || !form.height)) {
+      e.dimensions = 'Width and height are required'
+    }
     if (!form.quantity || parseInt(form.quantity) < 1) e.quantity = 'Quantity must be at least 1'
     if (computedPrice === null) {
       e.price = priceError || 'Cannot calculate price — please enter all specifications'
@@ -134,9 +137,15 @@ export default function NewOrder() {
       fd.append('email', form.email.trim())
       fd.append('existingCustomerId', existingCustomer?.id || '')
       fd.append('jobType', form.jobType)
-      fd.append('dimensions', `${form.width}ft × ${form.height}ft`)
-      fd.append('width', form.width)
-      fd.append('height', form.height)
+      if (form.jobType === 'Jersey') {
+        fd.append('dimensions', 'N/A')
+        fd.append('width', '1')
+        fd.append('height', '1')
+      } else {
+        fd.append('dimensions', `${form.width}ft × ${form.height}ft`)
+        fd.append('width', form.width)
+        fd.append('height', form.height)
+      }
       fd.append('materialType', form.materialType)
       fd.append('quantity', form.quantity)
       fd.append('totalCost', computedPrice)
@@ -283,47 +292,68 @@ export default function NewOrder() {
                   </div>
                 </div>
 
-                <div className="form-section-title">Dimensions &amp; Quantity</div>
-                <div className="form-row-3">
-                  <div className="form-group">
-                    <label className="form-label required" htmlFor="width">Width (feet)</label>
-                    <input
-                      id="width"
-                      type="number"
-                      min="0.01" step="0.01"
-                      className={`form-input ${errors.dimensions ? 'error' : ''}`}
-                      placeholder="e.g. 2"
-                      value={form.width}
-                      onChange={e => setField('width', e.target.value)}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label required" htmlFor="height">Height (feet)</label>
-                    <input
-                      id="height"
-                      type="number"
-                      min="0.01" step="0.01"
-                      className={`form-input ${errors.dimensions ? 'error' : ''}`}
-                      placeholder="e.g. 3"
-                      value={form.height}
-                      onChange={e => setField('height', e.target.value)}
-                    />
-                    {errors.dimensions && <div className="form-error">{errors.dimensions}</div>}
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label required" htmlFor="quantity">Quantity</label>
-                    <input
-                      id="quantity"
-                      type="number"
-                      min="1" step="1"
-                      className={`form-input ${errors.quantity ? 'error' : ''}`}
-                      placeholder="1"
-                      value={form.quantity}
-                      onChange={e => setField('quantity', e.target.value)}
-                    />
-                    {errors.quantity && <div className="form-error">{errors.quantity}</div>}
-                  </div>
-                </div>
+                {form.jobType === 'Jersey' ? (
+                  <>
+                    <div className="form-section-title">Quantity</div>
+                    <div className="form-group" style={{ maxWidth: '300px' }}>
+                      <label className="form-label required" htmlFor="quantity">Quantity</label>
+                      <input
+                        id="quantity"
+                        type="number"
+                        min="1" step="1"
+                        className={`form-input ${errors.quantity ? 'error' : ''}`}
+                        placeholder="1"
+                        value={form.quantity}
+                        onChange={e => setField('quantity', e.target.value)}
+                      />
+                      {errors.quantity && <div className="form-error">{errors.quantity}</div>}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="form-section-title">Dimensions &amp; Quantity</div>
+                    <div className="form-row-3">
+                      <div className="form-group">
+                        <label className="form-label required" htmlFor="width">Width (feet)</label>
+                        <input
+                          id="width"
+                          type="number"
+                          min="0.01" step="0.01"
+                          className={`form-input ${errors.dimensions ? 'error' : ''}`}
+                          placeholder="e.g. 2"
+                          value={form.width}
+                          onChange={e => setField('width', e.target.value)}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label required" htmlFor="height">Height (feet)</label>
+                        <input
+                          id="height"
+                          type="number"
+                          min="0.01" step="0.01"
+                          className={`form-input ${errors.dimensions ? 'error' : ''}`}
+                          placeholder="e.g. 3"
+                          value={form.height}
+                          onChange={e => setField('height', e.target.value)}
+                        />
+                        {errors.dimensions && <div className="form-error">{errors.dimensions}</div>}
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label required" htmlFor="quantity">Quantity</label>
+                        <input
+                          id="quantity"
+                          type="number"
+                          min="1" step="1"
+                          className={`form-input ${errors.quantity ? 'error' : ''}`}
+                          placeholder="1"
+                          value={form.quantity}
+                          onChange={e => setField('quantity', e.target.value)}
+                        />
+                        {errors.quantity && <div className="form-error">{errors.quantity}</div>}
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {/* Price Display */}
                 <div style={{

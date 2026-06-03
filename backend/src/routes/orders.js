@@ -29,8 +29,9 @@ ordersRouter.post('/', requireAuth, requireRole('staff', 'manager'), upload.sing
     if (!materialType) throw Object.assign(new Error('Material type is required'), { status: 422 })
 
     // Validate numeric inputs defensively
-    const parsedWidth = parseFloat(width)
-    const parsedHeight = parseFloat(height)
+    const isJersey = jobType === 'Jersey'
+    const parsedWidth = isJersey ? 1 : parseFloat(width)
+    const parsedHeight = isJersey ? 1 : parseFloat(height)
     const parsedQuantity = parseInt(quantity)
     const parsedPaymentAmount = parseFloat(paymentAmount || 0)
 

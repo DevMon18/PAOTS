@@ -5,7 +5,9 @@ import { supabase } from '../lib/supabase.js'
  * Formula: price_per_sqm × (width × height) × quantity
  */
 export async function calculatePrice({ jobType, materialType, width, height, quantity, needsLayout }) {
-  if (!jobType || !materialType || !width || !height || !quantity) {
+  const isJersey = jobType === 'Jersey'
+
+  if (!jobType || !materialType || (!isJersey && (!width || !height)) || !quantity) {
     const err = new Error('Cannot calculate — please enter all specifications (job type, material, dimensions, quantity).')
     err.status = 422
     throw err
@@ -24,18 +26,23 @@ export async function calculatePrice({ jobType, materialType, width, height, qua
     throw err
   }
 
-  const parsedWidth = parseFloat(width)
-  const parsedHeight = parseFloat(height)
-  let area = parsedWidth * parsedHeight
+  let rawTotal = 0
+  if (isJersey) {
+    rawTotal = rule.price_per_sqm * parseInt(quantity)
+  } else {
+    const parsedWidth = parseFloat(width)
+    const parsedHeight = parseFloat(height)
+    let area = parsedWidth * parsedHeight
 
-  if (jobType === 'UV Print') {
-    area = Math.max(4, area)
+    if (jobType === 'UV Tarp' || jobType === 'UV Stickers') {
+      area = Math.max(4, area)
+    }
+
+    rawTotal = rule.price_per_sqm * area * parseInt(quantity)
   }
 
-  let rawTotal = rule.price_per_sqm * area * parseInt(quantity)
-
   if (needsLayout === true || needsLayout === 'true') {
-    rawTotal += 180.00
+    rawTotal += (isJersey ? 300.00 : 180.00)
   }
 
   const total = Math.round(rawTotal * 100) / 100 // 2 decimal places
