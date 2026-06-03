@@ -132,11 +132,28 @@ usersRouter.delete('/:id', requireAuth, requireRole('manager'), async (req, res,
       .single()
 
     // Delete DB profile first
-    await supabase.from('users').delete().eq('id', id)
+    const { error: dbErr } = await supabase.from('users').delete().eq('id', id)
+    if (dbErr) {
+      if (dbErr.code === '23503' || dbErr.message?.includes('foreign key')) {
+        throw Object.assign(
+          new Error('Cannot delete this user because they have recorded activity (orders, payments, or status changes) in the system. Please deactivate their account instead.'),
+          { status: 400 }
+        )
+      }
+      throw dbErr
+    }
 
     // Delete auth user
     const { error: authErr } = await supabase.auth.admin.deleteUser(id)
-    if (authErr) throw authErr
+    if (authErr) {
+      if (authErr.message?.includes('foreign key') || authErr.status === 400) {
+        throw Object.assign(
+          new Error('Cannot delete this user because they have recorded activity in the system. Please deactivate their account instead.'),
+          { status: 400 }
+        )
+      }
+      throw authErr
+    }
 
     // Audit log
     await supabase.from('audit_log').insert({
