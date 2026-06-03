@@ -56,9 +56,12 @@ const LogOutIcon = () => (
   </svg>
 )
 
+import { useState } from 'react'
+
 export default function Sidebar() {
   const { user, role, signOut } = useAuth()
   const navigate = useNavigate()
+  const [isOpen, setIsOpen] = useState(false)
 
   const initials = user?.username
     ? user.username.substring(0, 2).toUpperCase()
@@ -70,16 +73,41 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="sidebar">
-      <div className="sidebar-logo">
-        <div className="logo-mark">
-          <div className="logo-icon">P</div>
-          <div>
-            <div className="logo-text">PAOTS</div>
-            <div className="logo-sub">Order Tracking</div>
+    <>
+      {/* Mobile Top Bar */}
+      <div className="mobile-topbar">
+        <button className="hamburger-btn" onClick={() => setIsOpen(true)} aria-label="Open menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={24} height={24}>
+            <line x1="4" y1="12" x2="20" y2="12" />
+            <line x1="4" y1="6" x2="20" y2="6" />
+            <line x1="4" y1="18" x2="20" y2="18" />
+          </svg>
+        </button>
+        <span className="mobile-logo-text">PAOTS</span>
+        <div style={{ width: 24 }} /> {/* spacing spacer */}
+      </div>
+
+      {/* Sidebar Backdrop */}
+      {isOpen && <div className="sidebar-backdrop" onClick={() => setIsOpen(false)} />}
+
+      <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
+        {/* Close Button on Mobile */}
+        <button className="sidebar-close-btn" onClick={() => setIsOpen(false)} aria-label="Close menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={20} height={20}>
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+
+        <div className="sidebar-logo">
+          <div className="logo-mark">
+            <div className="logo-icon">P</div>
+            <div>
+              <div className="logo-text">PAOTS</div>
+              <div className="logo-sub">Order Tracking</div>
+            </div>
           </div>
         </div>
-      </div>
 
       <nav className="sidebar-nav">
         {/* Staff navigation */}
@@ -135,5 +163,6 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
-  )
+  </>
+)
 }
