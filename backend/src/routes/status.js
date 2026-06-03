@@ -31,8 +31,10 @@ statusRouter.patch('/:id/status', requireAuth, requireRole('designer', 'staff', 
     const currentIdx = STATUS_SEQUENCE.indexOf(order.status)
     const nextIdx = STATUS_SEQUENCE.indexOf(newStatus)
 
-    // Enforce sequential transitions (EH-05)
-    if (nextIdx !== currentIdx + 1) {
+    const isRevisionRequest = newStatus === 'designing' && ['printing', 'ready'].includes(order.status)
+
+    // Enforce sequential transitions unless it's a revision request (EH-05)
+    if (!isRevisionRequest && nextIdx !== currentIdx + 1) {
       const expectedNext = STATUS_SEQUENCE[currentIdx + 1]
       throw Object.assign(
         new Error(`Invalid status change. The next valid status is "${expectedNext}".`),
@@ -42,11 +44,17 @@ statusRouter.patch('/:id/status', requireAuth, requireRole('designer', 'staff', 
 
     // Role restrictions
     const userRole = req.userRole
-    if (userRole === 'designer' && !DESIGNER_CAN_SET.includes(newStatus)) {
-      throw Object.assign(new Error('Designers can only set status to Designing, Printing, or Ready.'), { status: 403 })
+    if (userRole === 'designer') {
+      const allowed = ['designing', 'printing', 'ready']
+      if (!allowed.includes(newStatus)) {
+        throw Object.assign(new Error('Designers can only set status to Designing, Printing, or Ready.'), { status: 403 })
+      }
     }
-    if (userRole === 'staff' && !STAFF_CAN_SET.includes(newStatus)) {
-      throw Object.assign(new Error('Staff can only mark orders as Collected.'), { status: 403 })
+    if (userRole === 'staff') {
+      const allowed = ['designing', 'printing', 'collected']
+      if (!allowed.includes(newStatus)) {
+        throw Object.assign(new Error('Staff can only set status to Designing, Printing, or Collected.'), { status: 403 })
+      }
     }
 
     // Atomic update with conflict detection (CON-01, CON-02)

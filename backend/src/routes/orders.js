@@ -86,13 +86,8 @@ ordersRouter.post('/', requireAuth, requireRole('staff', 'manager'), upload.sing
       )
     }
 
-    if (parsedPaymentAmount > totalCost) {
-      throw Object.assign(
-        new Error(`Amount entered exceeds the outstanding balance of ₱${totalCost.toFixed(2)}. Please enter a valid amount.`),
-        { status: 422 }
-      )
-    }
-    const balanceDue = Math.round((totalCost - parsedPaymentAmount) * 100) / 100
+    const actualRecordedPayment = Math.min(totalCost, parsedPaymentAmount)
+    const balanceDue = Math.round((totalCost - actualRecordedPayment) * 100) / 100
     const payStatus = balanceDue === 0 ? 'paid_full' : parsedPaymentAmount > 0 ? 'downpayment' : 'downpayment'
 
     // Generate Tracking ID
@@ -124,7 +119,7 @@ ordersRouter.post('/', requireAuth, requireRole('staff', 'manager'), upload.sing
         material_type: materialType,
         quantity: parsedQuantity,
         total_cost: totalCost,
-        downpayment_amount: parsedPaymentAmount,
+        downpayment_amount: actualRecordedPayment,
         balance_due: balanceDue,
         payment_status: payStatus,
         status: 'received',
@@ -149,7 +144,7 @@ ordersRouter.post('/', requireAuth, requireRole('staff', 'manager'), upload.sing
     if (parsedPaymentAmount > 0) {
       await supabase.from('payments').insert({
         order_id: order.id,
-        amount: parsedPaymentAmount,
+        amount: actualRecordedPayment,
         payment_method: paymentMethod || 'cash',
         ewallet_ref: paymentMethod === 'ewallet' ? ewalletRef : null,
         payment_status: payStatus,
@@ -201,6 +196,115 @@ ordersRouter.post('/', requireAuth, requireRole('staff', 'manager'), upload.sing
     })
 
     res.status(201).json({ order })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// POST /api/orders/:id/revision — upload a revised layout file
+ordersRouter.post('/:id/revision', requireAuth, requireRole('designer', 'staff', 'manager'), upload.single('file'), async (req, res, next) => {
+  try {
+    const { id } = req.params
+    if (!req.file) {
+      throw Object.assign(new Error('No file provided for revision.'), { status: 422 })
+    }
+
+    // Verify order exists
+    const { data: order, error: orderErr } = await supabase
+      .from('orders')
+      .select('id, tracking_id, status')
+      .eq('id', id)
+      .single()
+
+    if (orderErr || !order) {
+      throw Object.assign(new Error('Order not found.'), { status: 404 })
+    }
+
+    // Validate file type
+    const ext = '.' + req.file.originalname.split('.').pop().toLowerCase()
+    if (!SUPPORTED_FORMATS.includes(ext)) {
+      throw Object.assign(
+        new Error(`This file type is not supported. Please upload a .pdf, .psd, .jpg, or .png file.`),
+        { status: 422 }
+      )
+    }
+
+    const fileBuffer = req.file.buffer
+    const originalFilename = req.file.originalname
+    const checksum = createHash('sha256').update(fileBuffer).digest('hex')
+
+    // Find and delete previous files from Supabase Storage and DB
+    const { data: oldFiles } = await supabase
+      .from('file_attachments')
+      .select('id, storage_path, original_filename')
+      .eq('order_id', id)
+
+    if (oldFiles && oldFiles.length > 0) {
+      const pathsToDelete = oldFiles.map(f => f.storage_path)
+      const idsToDelete = oldFiles.map(f => f.id)
+
+      // Delete from storage
+      const { error: deleteStorageErr } = await supabase.storage
+        .from('order-files')
+        .remove(pathsToDelete)
+      
+      if (deleteStorageErr) {
+        console.error('[Storage Delete Error]', deleteStorageErr)
+      }
+
+      // Delete from database
+      const { error: deleteDbErr } = await supabase
+        .from('file_attachments')
+        .delete()
+        .in('id', idsToDelete)
+
+      if (deleteDbErr) throw deleteDbErr
+    }
+
+    // Upload new file to Supabase Storage
+    const storedFilename = `revision_${Date.now()}_${order.tracking_id}_${originalFilename}`
+    const storagePath = `orders/${order.id}/${storedFilename}`
+
+    const { error: uploadErr } = await supabase.storage
+      .from('order-files')
+      .upload(storagePath, fileBuffer, { contentType: req.file.mimetype, upsert: true })
+
+    if (uploadErr) {
+      throw Object.assign(new Error('File upload failed: ' + uploadErr.message), { status: 500 })
+    }
+
+    // Insert new file_attachments record
+    const { data: newAttachment, error: insertErr } = await supabase
+      .from('file_attachments')
+      .insert({
+        order_id: order.id,
+        original_filename: originalFilename,
+        stored_filename: storedFilename,
+        storage_path: storagePath,
+        file_size_bytes: fileBuffer.length,
+        file_format: ext,
+        uploaded_by: req.user.id,
+        checksum,
+      })
+      .select('*')
+      .single()
+
+    if (insertErr) throw insertErr
+
+    // Audit log
+    await supabase.from('audit_log').insert({
+      user_id: req.user.id,
+      action: 'FILE_REVISED',
+      target_table: 'orders',
+      target_id: order.id,
+      details: {
+        tracking_id: order.tracking_id,
+        old_files: oldFiles?.map(f => f.original_filename) || [],
+        new_file: originalFilename
+      },
+    })
+
+    res.json({ ok: true, file: newAttachment })
   } catch (err) {
     next(err)
   }

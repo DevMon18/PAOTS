@@ -23,6 +23,8 @@ export default function OrderDetail({ designerView = false }) {
   const [statusLoading, setStatusLoading] = useState(false)
   const [payForm, setPayForm] = useState({ amount: '', method: 'cash', ewalletRef: '' })
   const [payError, setPayError] = useState('')
+  const [viewingFile, setViewingFile] = useState(null)
+  const [uploadingRevision, setUploadingRevision] = useState(false)
 
   async function fetchOrder() {
     setLoading(true)
@@ -60,25 +62,10 @@ export default function OrderDetail({ designerView = false }) {
     return () => supabase.removeChannel(channel)
   }, [id])
 
-  async function advanceStatus() {
-    const nextMap = { received:'designing', designing:'printing', printing:'ready', ready:'collected' }
-    const next = nextMap[order.status]
-    if (!next) return
+  async function updateOrderStatus(newStatus) {
     setStatusLoading(true)
     try {
-      await api.patch(`/api/orders/${id}/status`, { newStatus: next })
-      await fetchOrder()
-    } catch (err) {
-      alert(err.message)
-    } finally {
-      setStatusLoading(false)
-    }
-  }
-
-  async function handleCollect() {
-    setStatusLoading(true)
-    try {
-      await api.patch(`/api/orders/${id}/status`, { newStatus: 'collected' })
+      await api.patch(`/api/orders/${id}/status`, { newStatus })
       await fetchOrder()
     } catch (err) {
       alert(err.message)
@@ -92,18 +79,16 @@ export default function OrderDetail({ designerView = false }) {
     setPayError('')
     const amount = parseFloat(payForm.amount)
     if (!amount || amount <= 0) { setPayError('Enter a valid amount'); return }
-    if (amount > parseFloat(order.balance_due)) {
-      setPayError(`Amount entered exceeds the outstanding balance of ₱${parseFloat(order.balance_due).toFixed(2)}. Please enter a valid amount.`)
-      return
-    }
     if (payForm.method === 'ewallet' && !payForm.ewalletRef.trim()) {
       setPayError('E-wallet reference number is required')
       return
     }
+    const balanceDueVal = parseFloat(order.balance_due)
+    const amountToSend = Math.min(amount, balanceDueVal)
     try {
       await api.post('/api/payments', {
         orderId: id,
-        amount,
+        amount: amountToSend,
         paymentMethod: payForm.method,
         ewalletRef: payForm.ewalletRef,
       })
@@ -112,6 +97,52 @@ export default function OrderDetail({ designerView = false }) {
       await fetchOrder()
     } catch (err) {
       setPayError(err.message)
+    }
+  }
+
+  async function handleViewFile(attachment) {
+    try {
+      const { data, error } = await supabase.storage
+        .from('order-files')
+        .createSignedUrl(attachment.storage_path, 3600)
+      if (error) throw error
+      if (data?.signedUrl) {
+        const ext = attachment.original_filename.split('.').pop().toLowerCase()
+        setViewingFile({
+          name: attachment.original_filename,
+          url: data.signedUrl,
+          ext,
+        })
+      }
+    } catch (err) {
+      alert('Error fetching file preview: ' + err.message)
+    }
+  }
+
+  async function handleUploadRevision(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    
+    // Check file size (max 50MB)
+    if (file.size > 50 * 1024 * 1024) {
+      alert('File size exceeds the 50MB limit.')
+      return
+    }
+
+    setUploadingRevision(true)
+    const fd = new FormData()
+    fd.append('file', file)
+
+    try {
+      await api.post(`/api/orders/${id}/revision`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+      await fetchOrder()
+      alert('Revision uploaded successfully!')
+    } catch (err) {
+      alert('Failed to upload revision: ' + err.message)
+    } finally {
+      setUploadingRevision(false)
     }
   }
 
@@ -167,26 +198,71 @@ export default function OrderDetail({ designerView = false }) {
                 View Claim Stub
               </button>
             )}
-            {canAdvance && (
+            {order.status === 'received' && (
               <button
-                id="advance-status-btn"
                 className={`btn btn-primary ${statusLoading ? 'btn-loading' : ''}`}
-                onClick={advanceStatus}
                 disabled={statusLoading}
+                onClick={() => updateOrderStatus('designing')}
               >
-                {!statusLoading && `Mark as ${({received:'Designing',designing:'Printing',printing:'Ready'})[order.status]}`}
+                Start Designing
               </button>
             )}
-            {canCollect && (
+            {order.status === 'designing' && (
               <button
-                id="collect-btn"
                 className={`btn btn-success ${statusLoading ? 'btn-loading' : ''}`}
-                onClick={handleCollect}
-                disabled={statusLoading || parseFloat(order.balance_due) > 0}
-                title={parseFloat(order.balance_due) > 0 ? 'Collect remaining balance first' : ''}
+                disabled={statusLoading}
+                onClick={() => updateOrderStatus('printing')}
               >
-                {!statusLoading && 'Mark as Collected'}
+                Approve for Printing
               </button>
+            )}
+            {order.status === 'printing' && (
+              <>
+                <button
+                  className={`btn btn-secondary ${statusLoading ? 'btn-loading' : ''}`}
+                  disabled={statusLoading}
+                  onClick={() => {
+                    if (window.confirm('Are you sure you want to send this order back to Designing status for revision?')) {
+                      updateOrderStatus('designing')
+                    }
+                  }}
+                >
+                  Request Revision
+                </button>
+                <button
+                  className={`btn btn-primary ${statusLoading ? 'btn-loading' : ''}`}
+                  disabled={statusLoading}
+                  onClick={() => updateOrderStatus('ready')}
+                >
+                  Mark as Ready
+                </button>
+              </>
+            )}
+            {order.status === 'ready' && (
+              <>
+                <button
+                  className={`btn btn-secondary ${statusLoading ? 'btn-loading' : ''}`}
+                  disabled={statusLoading}
+                  onClick={() => {
+                    if (window.confirm('Are you sure you want to send this order back to Designing status for revision?')) {
+                      updateOrderStatus('designing')
+                    }
+                  }}
+                >
+                  Request Revision
+                </button>
+                {(role === 'staff' || role === 'manager') && (
+                  <button
+                    id="collect-btn"
+                    className={`btn btn-success ${statusLoading ? 'btn-loading' : ''}`}
+                    disabled={statusLoading || parseFloat(order.balance_due) > 0}
+                    onClick={() => updateOrderStatus('collected')}
+                    title={parseFloat(order.balance_due) > 0 ? 'Collect remaining balance first' : ''}
+                  >
+                    Mark as Collected
+                  </button>
+                )}
+              </>
             )}
             {canPay && (
               <button id="record-payment-btn" className="btn btn-primary" onClick={() => setPaymentModal(true)}>
@@ -270,7 +346,7 @@ export default function OrderDetail({ designerView = false }) {
                 <div className="card-header"><h2>Layout File</h2></div>
                 <div className="card-body">
                   {fileAttachments.length === 0 ? (
-                    <div className="alert alert-warning">
+                    <div className="alert alert-warning" style={{ marginBottom: ['designing', 'printing'].includes(order.status) ? 16 : 0 }}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                         <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
                         <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
@@ -291,11 +367,35 @@ export default function OrderDetail({ designerView = false }) {
                             <div className="text-sm font-semibold">{f.original_filename}</div>
                             <div className="text-xs text-muted">{(f.file_size_bytes / (1024*1024)).toFixed(1)} MB</div>
                           </div>
-                          <button id="download-file-btn" className="btn btn-sm btn-secondary" onClick={() => downloadFile(f)}>
-                            Download
-                          </button>
+                          <div className="flex gap-2">
+                            <button id="view-file-btn" className="btn btn-sm btn-secondary" onClick={() => handleViewFile(f)}>
+                              View File
+                            </button>
+                            <button id="download-file-btn" className="btn btn-sm btn-secondary" onClick={() => downloadFile(f)}>
+                              Download
+                            </button>
+                          </div>
                         </div>
                       ))}
+                    </div>
+                  )}
+                  {['designing', 'printing'].includes(order.status) && (
+                    <div style={{ marginTop: fileAttachments.length > 0 ? 16 : 0, paddingTop: fileAttachments.length > 0 ? 16 : 0, borderTop: fileAttachments.length > 0 ? '1px solid var(--color-border)' : 'none' }}>
+                      <label className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', cursor: 'pointer', alignItems: 'center', gap: 6 }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                        </svg>
+                        {uploadingRevision ? 'Uploading...' : 'Upload Revision'}
+                        <input
+                          type="file"
+                          style={{ display: 'none' }}
+                          onChange={handleUploadRevision}
+                          disabled={uploadingRevision}
+                        />
+                      </label>
+                      <p className="text-xs text-muted" style={{ marginTop: 4 }}>
+                        Replace current layout with a revised file (Max 50MB)
+                      </p>
                     </div>
                   )}
                 </div>
@@ -454,6 +554,21 @@ export default function OrderDetail({ designerView = false }) {
                   />
                 </div>
 
+                {parseFloat(payForm.amount || 0) > 0 && (
+                  <div style={{ padding: 12, background: 'var(--color-surface-2)', borderRadius: 8, fontSize: 14 }}>
+                    <div className="flex-between" style={{ marginBottom: 4 }}>
+                      <span className="text-muted">Remaining Balance:</span>
+                      <span className="font-semibold">{formatCurrency(Math.max(0, parseFloat(order.balance_due || 0) - parseFloat(payForm.amount || 0)))}</span>
+                    </div>
+                    {parseFloat(payForm.amount || 0) > parseFloat(order.balance_due || 0) && (
+                      <div className="flex-between" style={{ color: 'var(--color-success)', fontWeight: 'bold' }}>
+                        <span>Change Due:</span>
+                        <span>{formatCurrency(parseFloat(payForm.amount || 0) - parseFloat(order.balance_due || 0))}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="form-group">
                   <label className="form-label required">Payment Method</label>
                   <select
@@ -490,6 +605,44 @@ export default function OrderDetail({ designerView = false }) {
         {/* Void Modal */}
         {voidModal && (
           <VoidModal payment={voidModal} onConfirm={handleVoid} onClose={() => setVoidModal(null)} />
+        )}
+
+        {/* File Viewer Modal */}
+        {viewingFile && (
+          <div className="modal-overlay" onClick={() => setViewingFile(null)}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '80%', width: '900px', height: '80vh', display: 'flex', flexDirection: 'column' }}>
+              <div className="modal-header">
+                <h3>Preview: {viewingFile.name}</h3>
+                <button className="btn btn-sm btn-secondary btn-icon" onClick={() => setViewingFile(null)}>✕</button>
+              </div>
+              <div className="modal-body" style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', padding: 0, position: 'relative', background: '#000' }}>
+                {['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(viewingFile.ext) ? (
+                  <img
+                    src={viewingFile.url}
+                    alt={viewingFile.name}
+                    style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                  />
+                ) : viewingFile.ext === 'pdf' ? (
+                  <iframe
+                    src={viewingFile.url}
+                    title={viewingFile.name}
+                    style={{ width: '100%', height: '100%', border: 'none' }}
+                  />
+                ) : (
+                  <div className="flex-col gap-4 text-center" style={{ color: '#fff', padding: 24 }}>
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ margin: '0 auto', opacity: 0.7 }}>
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    <p className="font-semibold" style={{ fontSize: 16 }}>Preview not supported for this file type ({viewingFile.ext ? viewingFile.ext.toUpperCase() : 'UNKNOWN'})</p>
+                    <a href={viewingFile.url} target="_blank" rel="noreferrer" className="btn btn-primary" style={{ display: 'inline-flex', alignSelf: 'center' }}>
+                      Open File in New Tab
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         )}
       </main>
     </div>

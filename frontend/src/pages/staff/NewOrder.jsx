@@ -108,9 +108,6 @@ export default function NewOrder() {
       e.price = priceError || 'Cannot calculate price — please enter all specifications'
     }
     if (!form.paymentAmount || parseFloat(form.paymentAmount) <= 0) e.paymentAmount = 'Payment amount is required'
-    if (computedPrice !== null && parseFloat(form.paymentAmount) > computedPrice) {
-      e.paymentAmount = `Amount entered exceeds the outstanding balance of ₱${computedPrice.toFixed(2)}. Please enter a valid amount.`
-    }
     if (!file && !form.needsLayout) e.file = 'Please attach a layout file or mark as "File to be submitted later"'
     if (!form.estimatedPickupDate) e.estimatedPickupDate = 'Estimated pickup date is required'
     if (form.paymentMethod === 'ewallet' && !form.ewalletRef.trim()) e.ewalletRef = 'E-wallet reference number is required'
@@ -168,6 +165,10 @@ export default function NewOrder() {
   const balanceDue = computedPrice !== null
     ? Math.max(0, computedPrice - parseFloat(form.paymentAmount || 0))
     : null
+
+  const changeDue = computedPrice !== null && parseFloat(form.paymentAmount || 0) > computedPrice
+    ? parseFloat(form.paymentAmount || 0) - computedPrice
+    : 0
 
   return (
     <div className="app-layout">
@@ -458,12 +459,20 @@ export default function NewOrder() {
                       <span className="text-sm text-muted">Amount Paid</span>
                       <span className="font-semibold">₱{parseFloat(form.paymentAmount || 0).toFixed(2)}</span>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 8, borderBottom: changeDue > 0 ? '1px solid var(--color-border)' : 'none', marginBottom: changeDue > 0 ? 8 : 0 }}>
                       <span className="text-sm font-bold">Balance Due</span>
                       <span style={{ fontSize: 20, fontWeight: 800, color: balanceDue > 0 ? 'var(--color-warning)' : 'var(--color-success)' }}>
                         ₱{(balanceDue || 0).toFixed(2)}
                       </span>
                     </div>
+                    {changeDue > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span className="text-sm font-bold" style={{ color: 'var(--color-success)' }}>Change Due</span>
+                        <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--color-success)' }}>
+                          ₱{changeDue.toFixed(2)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
 

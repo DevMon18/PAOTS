@@ -2,14 +2,19 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import api from '../../lib/api'
 import Sidebar from '../../components/Sidebar'
+import { useAuth } from '../../contexts/AuthContext'
 
 const ROLES = ['staff', 'designer', 'manager']
 
 export default function UserManagement() {
+  const { user: currentUser } = useAuth()
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [addModal, setAddModal] = useState(false)
+  const [editModal, setEditModal] = useState(false)
+  const [deleteModal, setDeleteModal] = useState(null) // user object to delete
   const [form, setForm] = useState({ email: '', username: '', password: '', role: 'staff' })
+  const [editForm, setEditForm] = useState({ id: '', username: '', role: 'staff', isActive: true, password: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -21,11 +26,6 @@ export default function UserManagement() {
 
   useEffect(() => { fetchUsers() }, [])
 
-  async function toggleActive(user) {
-    await supabase.from('users').update({ is_active: !user.is_active }).eq('id', user.id)
-    await fetchUsers()
-  }
-
   async function createUser(e) {
     e.preventDefault()
     setError('')
@@ -34,6 +34,40 @@ export default function UserManagement() {
       await api.post('/api/users', form)
       setAddModal(false)
       setForm({ email: '', username: '', password: '', role: 'staff' })
+      await fetchUsers()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleEditUser(e) {
+    e.preventDefault()
+    setError('')
+    setSaving(true)
+    try {
+      await api.patch(`/api/users/${editForm.id}`, {
+        username: editForm.username,
+        role: editForm.role,
+        isActive: editForm.isActive,
+        password: editForm.password ? editForm.password : undefined,
+      })
+      setEditModal(false)
+      await fetchUsers()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDeleteUser(userId) {
+    setError('')
+    setSaving(true)
+    try {
+      await api.delete(`/api/users/${userId}`)
+      setDeleteModal(null)
       await fetchUsers()
     } catch (err) {
       setError(err.message)
@@ -110,12 +144,35 @@ export default function UserManagement() {
                         </td>
                         <td className="muted text-sm">{new Date(user.created_at).toLocaleDateString()}</td>
                         <td>
-                          <button
-                            className={`btn btn-sm ${user.is_active ? 'btn-danger' : 'btn-success'}`}
-                            onClick={() => toggleActive(user)}
-                          >
-                            {user.is_active ? 'Deactivate' : 'Activate'}
-                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              className="btn btn-sm btn-secondary"
+                              onClick={() => {
+                                setError('')
+                                setEditForm({
+                                  id: user.id,
+                                  username: user.username,
+                                  role: user.role,
+                                  isActive: user.is_active,
+                                  password: '',
+                                })
+                                setEditModal(true)
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="btn btn-sm btn-danger"
+                              onClick={() => {
+                                setError('')
+                                setDeleteModal(user)
+                              }}
+                              disabled={user.id === currentUser?.id}
+                              title={user.id === currentUser?.id ? 'You cannot delete yourself' : ''}
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -160,6 +217,75 @@ export default function UserManagement() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {editModal && (
+          <div className="modal-overlay" onClick={() => setEditModal(false)}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>Edit User</h3>
+                <button className="btn btn-sm btn-secondary btn-icon" onClick={() => setEditModal(false)}>✕</button>
+              </div>
+              <form onSubmit={handleEditUser} className="flex-col gap-4">
+                {error && <div className="alert alert-error" style={{ fontSize: 13 }}>{error}</div>}
+                <div className="form-group">
+                  <label className="form-label required">Username</label>
+                  <input type="text" className="form-input" value={editForm.username} onChange={e => setEditForm(f => ({ ...f, username: e.target.value }))} required />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">New Password (leave blank to keep current)</label>
+                  <input type="password" className="form-input" placeholder="Min. 8 characters" value={editForm.password} onChange={e => setEditForm(f => ({ ...f, password: e.target.value }))} minLength={8} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label required">Role</label>
+                  <select className="form-select" value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}>
+                    {ROLES.map(r => <option key={r} value={r} style={{ textTransform: 'capitalize' }}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label required">Status</label>
+                  <select className="form-select" value={editForm.isActive ? 'active' : 'inactive'} onChange={e => setEditForm(f => ({ ...f, isActive: e.target.value === 'active' }))}>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+                <div className="flex gap-3 mt-2">
+                  <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setEditModal(false)}>Cancel</button>
+                  <button type="submit" className={`btn btn-primary ${saving ? 'btn-loading' : ''}`} style={{ flex: 1 }} disabled={saving}>
+                    {!saving && 'Save Changes'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {deleteModal && (
+          <div className="modal-overlay" onClick={() => setDeleteModal(null)}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>Delete User</h3>
+                <button className="btn btn-sm btn-secondary btn-icon" onClick={() => setDeleteModal(null)}>✕</button>
+              </div>
+              <div className="flex-col gap-4">
+                {error && <div className="alert alert-error" style={{ fontSize: 13 }}>{error}</div>}
+                <div className="alert alert-warning" style={{ margin: 0 }}>
+                  Are you sure you want to delete the user account for <strong>{deleteModal.username}</strong>? This action is permanent and cannot be undone.
+                </div>
+                <div className="flex gap-3 mt-2">
+                  <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setDeleteModal(null)}>Cancel</button>
+                  <button
+                    className={`btn btn-danger ${saving ? 'btn-loading' : ''}`}
+                    style={{ flex: 1 }}
+                    disabled={saving}
+                    onClick={() => handleDeleteUser(deleteModal.id)}
+                  >
+                    {!saving && 'Delete Account'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

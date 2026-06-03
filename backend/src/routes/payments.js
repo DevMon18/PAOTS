@@ -27,15 +27,8 @@ paymentsRouter.post('/', requireAuth, requireRole('staff', 'manager'), async (re
 
     const currentBalance = parseFloat(order.balance_due)
 
-    // EH-04: Overpayment check
-    if (parsedAmount > currentBalance) {
-      throw Object.assign(
-        new Error(`Amount entered exceeds the outstanding balance of ₱${currentBalance.toFixed(2)}. Please enter a valid amount.`),
-        { status: 422 }
-      )
-    }
-
-    const newBalance = Math.round((currentBalance - parsedAmount) * 100) / 100
+    const actualRecordedAmount = Math.min(currentBalance, parsedAmount)
+    const newBalance = Math.round((currentBalance - actualRecordedAmount) * 100) / 100
     const newPayStatus = newBalance <= 0 ? 'paid_full' : 'partial'
 
     // Atomic: update order balance + insert payment record
@@ -47,7 +40,7 @@ paymentsRouter.post('/', requireAuth, requireRole('staff', 'manager'), async (re
       }).eq('id', orderId).eq('updated_at', order.updated_at), // optimistic lock (CON-03)
       supabase.from('payments').insert({
         order_id: orderId,
-        amount: parsedAmount,
+        amount: actualRecordedAmount,
         payment_method: paymentMethod || 'cash',
         ewallet_ref: paymentMethod === 'ewallet' ? ewalletRef : null,
         payment_status: newPayStatus,

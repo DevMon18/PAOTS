@@ -58,3 +58,97 @@ usersRouter.post('/', requireAuth, requireRole('manager'), async (req, res, next
     next(err)
   }
 })
+
+// PATCH /api/users/:id — update a user profile or reset password
+usersRouter.patch('/:id', requireAuth, requireRole('manager'), async (req, res, next) => {
+  try {
+    const { id } = req.params
+    const { username, role, isActive, password } = req.body
+
+    if (id === req.user.id) {
+      if (isActive === false) {
+        throw Object.assign(new Error('You cannot deactivate your own account.'), { status: 400 })
+      }
+      if (role && role !== 'manager') {
+        throw Object.assign(new Error('You cannot change your own role from manager.'), { status: 400 })
+      }
+    }
+
+    // Update password via Auth Admin if provided
+    if (password && password.trim()) {
+      if (password.length < 8) {
+        throw Object.assign(new Error('Password must be at least 8 characters.'), { status: 422 })
+      }
+      const { error: authErr } = await supabase.auth.admin.updateUserById(id, {
+        password: password.trim()
+      })
+      if (authErr) throw Object.assign(new Error(authErr.message), { status: 422 })
+    }
+
+    // Update users table details
+    const updateData = {}
+    if (username !== undefined) updateData.username = username.trim()
+    if (role !== undefined) updateData.role = role
+    if (isActive !== undefined) updateData.is_active = isActive
+
+    if (Object.keys(updateData).length > 0) {
+      const { error: profileErr } = await supabase
+        .from('users')
+        .update(updateData)
+        .eq('id', id)
+
+      if (profileErr) throw profileErr
+    }
+
+    // Audit log
+    await supabase.from('audit_log').insert({
+      user_id: req.user.id,
+      action: 'USER_UPDATED',
+      target_table: 'users',
+      target_id: id,
+      details: { username, role, is_active: isActive, password_changed: !!password },
+    })
+
+    res.json({ ok: true })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// DELETE /api/users/:id — delete a user account
+usersRouter.delete('/:id', requireAuth, requireRole('manager'), async (req, res, next) => {
+  try {
+    const { id } = req.params
+
+    if (id === req.user.id) {
+      throw Object.assign(new Error('You cannot delete your own account.'), { status: 400 })
+    }
+
+    // Get details for audit log
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('username')
+      .eq('id', id)
+      .single()
+
+    // Delete DB profile first
+    await supabase.from('users').delete().eq('id', id)
+
+    // Delete auth user
+    const { error: authErr } = await supabase.auth.admin.deleteUser(id)
+    if (authErr) throw authErr
+
+    // Audit log
+    await supabase.from('audit_log').insert({
+      user_id: req.user.id,
+      action: 'USER_DELETED',
+      target_table: 'users',
+      target_id: id,
+      details: { username: userProfile?.username || 'unknown' },
+    })
+
+    res.json({ ok: true })
+  } catch (err) {
+    next(err)
+  }
+})

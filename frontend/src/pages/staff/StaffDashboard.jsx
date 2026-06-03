@@ -25,6 +25,18 @@ export default function StaffDashboard() {
   const fetchOrders = useCallback(async () => {
     setLoading(true)
     try {
+      let customerIds = []
+      const searchTerm = search.trim()
+      if (searchTerm) {
+        const { data: matchedCustomers } = await supabase
+          .from('customers')
+          .select('id')
+          .ilike('name', `%${searchTerm}%`)
+        if (matchedCustomers && matchedCustomers.length > 0) {
+          customerIds = matchedCustomers.map(c => c.id)
+        }
+      }
+
       let query = supabase
         .from('orders')
         .select(`
@@ -38,10 +50,17 @@ export default function StaffDashboard() {
 
       if (filter === 'active') {
         query = query.not('status', 'eq', 'collected')
+      } else if (filter === 'ready') {
+        query = query.eq('status', 'ready')
       }
 
-      if (search.trim()) {
-        query = query.or(`tracking_id.ilike.%${search}%,customers.name.ilike.%${search}%`)
+      if (searchTerm) {
+        if (customerIds.length > 0) {
+          const orCond = `tracking_id.ilike.%${searchTerm}%,${customerIds.map(id => `customer_id.eq.${id}`).join(',')}`
+          query = query.or(orCond)
+        } else {
+          query = query.ilike('tracking_id', `%${searchTerm}%`)
+        }
       }
 
       const { data, error } = await query.limit(100)
@@ -154,6 +173,13 @@ export default function StaffDashboard() {
                     onClick={() => setFilter('active')}
                   >
                     Active
+                  </button>
+                  <button
+                    className={`btn btn-sm ${filter === 'ready' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ border: 'none' }}
+                    onClick={() => setFilter('ready')}
+                  >
+                    Ready (Unclaimed)
                   </button>
                   <button
                     className={`btn btn-sm ${filter === 'all' ? 'btn-primary' : 'btn-secondary'}`}
