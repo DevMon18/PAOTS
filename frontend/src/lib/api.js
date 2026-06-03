@@ -4,7 +4,7 @@ import { supabase } from './supabase'
 const isLocalhost = typeof window !== 'undefined' && 
   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '[::1]')
 
-const baseURL = (isLocalhost ? import.meta.env.VITE_API_URL : null) || '/api'
+const baseURL = (isLocalhost ? import.meta.env.VITE_API_URL : null) || ''
 
 const api = axios.create({ baseURL })
 
