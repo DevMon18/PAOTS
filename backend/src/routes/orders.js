@@ -205,6 +205,7 @@ ordersRouter.post('/', requireAuth, requireRole('staff', 'manager'), upload.sing
 ordersRouter.post('/:id/revision', requireAuth, requireRole('designer', 'staff', 'manager'), upload.single('file'), async (req, res, next) => {
   try {
     const { id } = req.params
+    const { comment } = req.body
     if (!req.file) {
       throw Object.assign(new Error('No file provided for revision.'), { status: 422 })
     }
@@ -300,9 +301,24 @@ ordersRouter.post('/:id/revision', requireAuth, requireRole('designer', 'staff',
       details: {
         tracking_id: order.tracking_id,
         old_files: oldFiles?.map(f => f.original_filename) || [],
-        new_file: originalFilename
+        new_file: originalFilename,
+        comment: comment || null
       },
     })
+
+    // Companion comment log for layout replacement explanation
+    if (comment && comment.trim()) {
+      await supabase.from('audit_log').insert({
+        user_id: req.user.id,
+        action: 'ORDER_COMMENT',
+        target_table: 'orders',
+        target_id: order.id,
+        details: {
+          comment: comment.trim(),
+          file_name: originalFilename
+        }
+      })
+    }
 
     res.json({ ok: true, file: newAttachment })
   } catch (err) {
@@ -335,6 +351,57 @@ ordersRouter.get('/:id/files/:fileId/signed-url', requireAuth, async (req, res, 
     }
 
     res.json({ signedUrl: data.signedUrl })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// GET /api/orders/:id/comments — fetch discussion comments & replies
+ordersRouter.get('/:id/comments', requireAuth, async (req, res, next) => {
+  try {
+    const { id } = req.params
+    const { data: comments, error } = await supabase
+      .from('audit_log')
+      .select('*, users(username, role)')
+      .eq('target_table', 'orders')
+      .eq('target_id', id)
+      .in('action', ['ORDER_COMMENT', 'ORDER_COMMENT_REPLY', 'FILE_REVISED'])
+      .order('created_at', { ascending: true })
+
+    if (error) throw error
+    res.json({ comments: comments || [] })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// POST /api/orders/:id/comments — post a comment or threaded reply
+ordersRouter.post('/:id/comments', requireAuth, async (req, res, next) => {
+  try {
+    const { id } = req.params
+    const { comment, parentId } = req.body
+
+    if (!comment || !comment.trim()) {
+      throw Object.assign(new Error('Comment message is required.'), { status: 422 })
+    }
+
+    const { data: newComment, error } = await supabase
+      .from('audit_log')
+      .insert({
+        user_id: req.user.id,
+        action: parentId ? 'ORDER_COMMENT_REPLY' : 'ORDER_COMMENT',
+        target_table: 'orders',
+        target_id: id,
+        details: {
+          comment: comment.trim(),
+          parentId: parentId || null
+        }
+      })
+      .select('*, users(username, role)')
+      .single()
+
+    if (error) throw error
+    res.status(201).json({ comment: newComment })
   } catch (err) {
     next(err)
   }

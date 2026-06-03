@@ -27,6 +27,23 @@ export default function OrderDetail({ designerView = false }) {
   const [payError, setPayError] = useState('')
   const [viewingFile, setViewingFile] = useState(null)
   const [uploadingRevision, setUploadingRevision] = useState(false)
+  const [comments, setComments] = useState([])
+  const [submittingComment, setSubmittingComment] = useState(false)
+  const [rootCommentText, setRootCommentText] = useState('')
+  const [replyingToId, setReplyingToId] = useState(null)
+  const [replyText, setReplyText] = useState('')
+  const [replaceModal, setReplaceModal] = useState(false)
+  const [replaceFile, setReplaceFile] = useState(null)
+  const [replaceComment, setReplaceComment] = useState('')
+
+  async function fetchComments() {
+    try {
+      const { data } = await api.get(`/api/orders/${id}/comments`)
+      setComments(data.comments || [])
+    } catch (err) {
+      console.error('Failed to reload comments:', err)
+    }
+  }
 
   async function fetchOrder() {
     setLoading(true)
@@ -121,29 +138,56 @@ export default function OrderDetail({ designerView = false }) {
   }
 
   async function handleUploadRevision(e) {
-    const file = e.target.files[0]
-    if (!file) return
-    
+    if (e) e.preventDefault()
+    if (!replaceFile) {
+      showToast('Please select a file to upload.', 'error')
+      return
+    }
+
     // Check file size (max 50MB)
-    if (file.size > 50 * 1024 * 1024) {
+    if (replaceFile.size > 50 * 1024 * 1024) {
       showToast('File size exceeds the 50MB limit.', 'error')
       return
     }
 
     setUploadingRevision(true)
     const fd = new FormData()
-    fd.append('file', file)
+    fd.append('file', replaceFile)
+    if (replaceComment.trim()) {
+      fd.append('comment', replaceComment.trim())
+    }
 
     try {
       await api.post(`/api/orders/${id}/revision`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
+      setReplaceModal(false)
+      setReplaceFile(null)
+      setReplaceComment('')
       await fetchOrder()
-      showToast('Revision uploaded successfully!', 'success')
+      showToast('File replaced and revision uploaded successfully!', 'success')
     } catch (err) {
-      showToast('Failed to upload revision: ' + err.message, 'error')
+      showToast('Failed to replace file: ' + err.message, 'error')
     } finally {
       setUploadingRevision(false)
+    }
+  }
+
+  async function handlePostComment(e, parentId = null, textValue = '', setTextState = null) {
+    if (e) e.preventDefault()
+    const val = textValue.trim()
+    if (!val) return
+
+    setSubmittingComment(true)
+    try {
+      await api.post(`/api/orders/${id}/comments`, { comment: val, parentId })
+      showToast(parentId ? 'Reply posted successfully!' : 'Comment posted successfully!', 'success')
+      if (setTextState) setTextState('')
+      await fetchComments()
+    } catch (err) {
+      showToast(err.message, 'error')
+    } finally {
+      setSubmittingComment(false)
     }
   }
 
@@ -388,23 +432,206 @@ export default function OrderDetail({ designerView = false }) {
                   )}
                   {['designing', 'printing'].includes(order.status) && (
                     <div style={{ marginTop: fileAttachments.length > 0 ? 16 : 0, paddingTop: fileAttachments.length > 0 ? 16 : 0, borderTop: fileAttachments.length > 0 ? '1px solid var(--color-border)' : 'none' }}>
-                      <label className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', cursor: 'pointer', alignItems: 'center', gap: 6 }}>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        onClick={() => {
+                          setReplaceFile(null)
+                          setReplaceComment('')
+                          setReplaceModal(true)
+                        }}
+                      >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
                         </svg>
-                        {uploadingRevision ? 'Uploading...' : 'Upload Revision'}
-                        <input
-                          type="file"
-                          style={{ display: 'none' }}
-                          onChange={handleUploadRevision}
-                          disabled={uploadingRevision}
-                        />
-                      </label>
+                        Replace Layout File
+                      </button>
                       <p className="text-xs text-muted" style={{ marginTop: 4 }}>
-                        Replace current layout with a revised file (Max 50MB)
+                        Replace current layout with a revised file and add comments
                       </p>
                     </div>
                   )}
+                </div>
+              </div>
+              {/* Design Feedback & Comments */}
+              <div className="card">
+                <div className="card-header">
+                  <h2>Design Feedback & Comments ({comments.length})</h2>
+                </div>
+                <div className="card-body flex-col gap-4">
+                  {comments.length === 0 ? (
+                    <p className="text-sm text-muted text-center" style={{ padding: '16px 0' }}>No feedback or comments yet. Start the conversation below!</p>
+                  ) : (
+                    <div className="comments-list">
+                      {(() => {
+                        const rootComments = comments.filter(c => !c.details?.parentId)
+                        const repliesByParent = {}
+                        comments.forEach(c => {
+                          if (c.details?.parentId) {
+                            if (!repliesByParent[c.details.parentId]) {
+                              repliesByParent[c.details.parentId] = []
+                            }
+                            repliesByParent[c.details.parentId].push(c)
+                          }
+                        })
+
+                        return rootComments.map(c => {
+                          const replies = repliesByParent[c.id] || []
+                          const isReplying = replyingToId === c.id
+                          const authorRole = c.users?.role || 'staff'
+                          const isRevisionComment = !!c.details?.file_name
+
+                          return (
+                            <div key={c.id} className="comment-item" id={`comment-${c.id}`}>
+                              <div className="comment-header">
+                                <div className="comment-author-info">
+                                  <div className="user-avatar" style={{ width: 28, height: 28, fontSize: 12 }}>
+                                    {c.users?.username ? c.users.username.slice(0, 2).toUpperCase() : '??'}
+                                  </div>
+                                  <div>
+                                    <span className="font-semibold text-sm">{c.users?.username || 'System'}</span>
+                                    <span className={`role-badge role-badge-${authorRole}`} style={{ marginLeft: 8 }}>
+                                      {authorRole}
+                                    </span>
+                                  </div>
+                                </div>
+                                <span className="comment-meta">
+                                  {formatDate(c.created_at)}
+                                </span>
+                              </div>
+
+                              {isRevisionComment && (
+                                <div className="comment-revision-notice">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                                  </svg>
+                                  <span>Replaced Layout File: <strong>{c.details.file_name}</strong></span>
+                                </div>
+                              )}
+
+                              <div className="comment-body">
+                                {c.details?.comment}
+                              </div>
+
+                              <div className="comment-actions">
+                                <button
+                                  className="comment-action-btn"
+                                  onClick={() => {
+                                    if (isReplying) {
+                                      setReplyingToId(null)
+                                    } else {
+                                      setReplyingToId(c.id)
+                                      setReplyText('')
+                                    }
+                                  }}
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                                  </svg>
+                                  {isReplying ? 'Cancel' : 'Reply'}
+                                </button>
+                              </div>
+
+                              {/* Threaded Replies */}
+                              {replies.length > 0 && (
+                                <div className="replies-list">
+                                  {replies.map(r => {
+                                    const rRole = r.users?.role || 'staff'
+                                    return (
+                                      <div key={r.id} className="reply-item">
+                                        <div className="comment-header">
+                                          <div className="comment-author-info">
+                                            <div className="user-avatar" style={{ width: 24, height: 24, fontSize: 10 }}>
+                                              {r.users?.username ? r.users.username.slice(0, 2).toUpperCase() : '??'}
+                                            </div>
+                                            <div>
+                                              <span className="font-semibold text-sm">{r.users?.username || 'System'}</span>
+                                              <span className={`role-badge role-badge-${rRole}`} style={{ marginLeft: 6 }}>
+                                                {rRole}
+                                              </span>
+                                            </div>
+                                          </div>
+                                          <span className="comment-meta">
+                                            {formatDate(r.created_at)}
+                                          </span>
+                                        </div>
+                                        <div className="comment-body" style={{ marginTop: 4 }}>
+                                          {r.details?.comment}
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
+
+                              {/* Reply Input Form */}
+                              {isReplying && (
+                                <form
+                                  onSubmit={e => handlePostComment(e, c.id, replyText, (v) => { setReplyText(v); setReplyingToId(null); })}
+                                  className="reply-form"
+                                  style={{ marginLeft: replies.length > 0 ? 40 : 0 }}
+                                >
+                                  <textarea
+                                    className="form-textarea text-sm"
+                                    placeholder="Type your reply here..."
+                                    value={replyText}
+                                    onChange={e => setReplyText(e.target.value)}
+                                    rows={2}
+                                    required
+                                    autoFocus
+                                  />
+                                  <div className="flex gap-2 justify-end" style={{ marginTop: 8 }}>
+                                    <button
+                                      type="button"
+                                      className="btn btn-sm btn-secondary"
+                                      onClick={() => setReplyingToId(null)}
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      type="submit"
+                                      className={`btn btn-sm btn-primary ${submittingComment ? 'btn-loading' : ''}`}
+                                      disabled={submittingComment || !replyText.trim()}
+                                    >
+                                      Post Reply
+                                    </button>
+                                  </div>
+                                </form>
+                              )}
+                            </div>
+                          )
+                        })
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Add Root Comment Form */}
+                  <div className="divider" style={{ margin: '8px 0' }} />
+                  <form
+                    onSubmit={e => handlePostComment(e, null, rootCommentText, setRootCommentText)}
+                    className="flex-col gap-3"
+                  >
+                    <div className="form-group">
+                      <label className="form-label text-sm">Add Feedback / Comment</label>
+                      <textarea
+                        className="form-textarea"
+                        placeholder="Write a message, ask a question, or leave design feedback..."
+                        value={rootCommentText}
+                        onChange={e => setRootCommentText(e.target.value)}
+                        rows={3}
+                        required
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        className={`btn btn-primary ${submittingComment ? 'btn-loading' : ''}`}
+                        disabled={submittingComment || !rootCommentText.trim()}
+                      >
+                        Submit Comment
+                      </button>
+                    </div>
+                  </form>
                 </div>
               </div>
             </div>
@@ -648,6 +875,61 @@ export default function OrderDetail({ designerView = false }) {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Replace Layout File Modal */}
+        {replaceModal && (
+          <div className="modal-overlay" onClick={() => setReplaceModal(false)}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+              <div className="modal-header">
+                <h3>Replace Layout File</h3>
+                <button className="btn btn-sm btn-secondary btn-icon" onClick={() => setReplaceModal(false)}>✕</button>
+              </div>
+
+              <form onSubmit={handleUploadRevision} className="flex-col gap-4">
+                <div className="form-group">
+                  <label className="form-label required">Select New Layout File</label>
+                  <input
+                    type="file"
+                    className="form-input"
+                    onChange={e => setReplaceFile(e.target.files[0])}
+                    required
+                  />
+                  <p className="form-hint">Supported formats: .pdf, .psd, .jpg, .png (Max 50MB)</p>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Describe changes / feedback (optional)</label>
+                  <textarea
+                    className="form-textarea"
+                    placeholder="E.g., Adjusted logo positioning, updated client feedback revisions..."
+                    value={replaceComment}
+                    onChange={e => setReplaceComment(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex gap-3 mt-4">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ flex: 1 }}
+                    onClick={() => setReplaceModal(false)}
+                    disabled={uploadingRevision}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className={`btn btn-primary ${uploadingRevision ? 'btn-loading' : ''}`}
+                    style={{ flex: 1 }}
+                    disabled={uploadingRevision || !replaceFile}
+                  >
+                    {uploadingRevision ? 'Uploading...' : 'Upload & Replace'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

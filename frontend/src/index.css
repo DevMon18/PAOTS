@@ -839,24 +839,35 @@ input, textarea, select, button { font-family: inherit; }
     background: white;
   }
 
-  .claim-stub-title {
-    text-align: center;
-    font-size: 18px;
-    font-weight: bold;
-    border-bottom: 2px dashed #000;
-    padding-bottom: 12px;
-    margin-bottom: 12px;
+  .claim-stub-header {
+    background: none !important;
+    color: black !important;
+    padding: 0 0 16px 0 !important;
+    border-bottom: 2px dashed #000 !important;
+    text-shadow: none !important;
   }
 
-  .claim-stub-tracking {
-    text-align: center;
-    font-size: 28px;
-    font-weight: bold;
-    letter-spacing: 4px;
-    border: 2px solid #000;
-    padding: 12px;
-    margin: 12px 0;
-    border-radius: 4px;
+  .claim-stub-header h2 {
+    color: black !important;
+    text-shadow: none !important;
+  }
+
+  .claim-stub-header img {
+    border: none !important;
+    padding: 0 !important;
+    background: none !important;
+    filter: grayscale(100%);
+  }
+
+  .claim-stub-tracking-screen {
+    background: none !important;
+    border: 2px solid #000 !important;
+    color: black !important;
+    font-size: 24px !important;
+    padding: 8px 16px !important;
+    margin-top: 12px !important;
+    font-weight: bold !important;
+    letter-spacing: 4px !important;
   }
 
   .claim-stub-row {
@@ -1515,4 +1526,147 @@ input, textarea, select, button { font-family: inherit; }
     opacity: 1;
   }
 }
+
+/* ---------- Comments Thread ---------- */
+.comments-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.comment-item {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  position: relative;
+  transition: all var(--transition);
+}
+
+.comment-item:hover {
+  border-color: var(--color-border-light);
+}
+
+.comment-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.comment-author-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.comment-meta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.comment-body {
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  white-space: pre-wrap;
+  margin-top: var(--space-2);
+}
+
+.comment-actions {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+
+.comment-action-btn {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.comment-action-btn:hover {
+  color: var(--color-primary-hover);
+}
+
+/* Replies styling */
+.replies-list {
+  margin-left: 40px;
+  margin-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  border-left: 2px solid var(--color-border);
+  padding-left: var(--space-4);
+}
+
+.reply-item {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  transition: all var(--transition);
+}
+
+.reply-item:hover {
+  border-color: var(--color-border-light);
+}
+
+.reply-form {
+  margin-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Badges for roles in comments */
+.role-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.role-badge-designer {
+  background: rgba(124, 58, 237, 0.15);
+  color: #a78bfa;
+  border: 1px solid rgba(124, 58, 237, 0.3);
+}
+.role-badge-staff {
+  background: rgba(37, 99, 235, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(37, 99, 235, 0.3);
+}
+.role-badge-manager {
+  background: rgba(217, 119, 6, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(217, 119, 6, 0.3);
+}
+
+/* Revision attachment notice in comments */
+.comment-revision-notice {
+  background: rgba(56, 189, 248, 0.1);
+  border-left: 3px solid var(--color-info);
+  padding: var(--space-2) var(--space-3);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-info);
+  margin-bottom: var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 

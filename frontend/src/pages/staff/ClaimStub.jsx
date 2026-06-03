@@ -9,6 +9,7 @@ export default function ClaimStub() {
   const navigate = useNavigate()
   const [order, setOrder] = useState(state?.order || null)
   const [loading, setLoading] = useState(!state?.order)
+  const [printShop, setPrintShop] = useState('link')
 
   useEffect(() => {
     if (!state?.order) {
@@ -44,24 +45,56 @@ export default function ClaimStub() {
     <div style={{ minHeight: '100vh', background: 'var(--color-bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
 
       {/* Action buttons — hidden on print */}
-      <div className="claim-stub-actions no-print flex gap-3" style={{ marginBottom: 24 }}>
-        <button className="btn btn-secondary" onClick={() => navigate(-1)}>← Back</button>
+      <div className="claim-stub-actions no-print flex gap-3" style={{ marginBottom: 24, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button className="btn btn-secondary" onClick={() => navigate(-1)} style={{ height: '40px' }}>← Back</button>
+        <div style={{ minWidth: 260 }}>
+          <select
+            className="form-select"
+            value={printShop}
+            onChange={e => setPrintShop(e.target.value)}
+            style={{ padding: '8px 12px', fontSize: 13, height: '40px' }}
+          >
+            <option value="link">Link Digital Printing & I.T. Solutions</option>
+            <option value="right_media">Right Media Graphics</option>
+          </select>
+        </div>
         <button
           id="print-claim-stub-btn"
           className="btn btn-primary"
           onClick={() => window.print()}
+          style={{ height: '40px' }}
         >
           🖨 Print Claim Stub
         </button>
-        <button className="btn btn-secondary" onClick={() => navigate('/staff')}>Go to Dashboard</button>
+        <button className="btn btn-secondary" onClick={() => navigate('/staff')} style={{ height: '40px' }}>Go to Dashboard</button>
       </div>
 
       {/* Claim Stub */}
       <div className="claim-stub">
         <div className="claim-stub-header">
-          <div style={{ fontSize: 13, opacity: 0.8, fontWeight: 600, marginBottom: 4 }}>OFFICIAL CLAIM STUB</div>
-          <h2>Digital Print Shop</h2>
-          <div style={{ opacity: 0.75, fontSize: 13, marginTop: 4 }}>
+          <div style={{ fontSize: 11, opacity: 0.8, fontWeight: 700, textTransform: 'uppercase', marginBottom: 12, letterSpacing: '1px' }}>OFFICIAL CLAIM STUB</div>
+          
+          {printShop === 'link' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              <img
+                src="/link-logo.png"
+                alt="Link Digital Printing & I.T. Solutions"
+                style={{ maxWidth: '200px', height: 'auto', background: 'white', padding: '6px', borderRadius: '6px', border: '1px solid var(--color-border)' }}
+              />
+              <div style={{ fontSize: 11, opacity: 0.9, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', marginTop: 4 }}>
+                Digital Printing & I.T. Solutions
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+              <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.5px', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>RIGHT MEDIA GRAPHICS</h2>
+              <div style={{ fontSize: 11, opacity: 0.9, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                Advertising & Digital Printing Services
+              </div>
+            </div>
+          )}
+
+          <div style={{ opacity: 0.75, fontSize: 12, marginTop: 12 }}>
             Keep this stub to claim your order
           </div>
           <div className="claim-stub-tracking-screen">{order.tracking_id}</div>
