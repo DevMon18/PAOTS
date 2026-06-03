@@ -5,6 +5,7 @@ import api from '../../lib/api'
 import Sidebar from '../../components/Sidebar'
 import StatusBadge, { PaymentBadge } from '../../components/StatusBadge'
 import { useAuth } from '../../contexts/AuthContext'
+import { useToast } from '../../contexts/ToastContext'
 import { format } from 'date-fns'
 
 const STATUS_STEPS = ['received', 'designing', 'printing', 'ready', 'collected']
@@ -12,6 +13,7 @@ const STATUS_STEPS = ['received', 'designing', 'printing', 'ready', 'collected']
 export default function OrderDetail({ designerView = false }) {
   const { id } = useParams()
   const { role } = useAuth()
+  const { showToast } = useToast()
   const navigate = useNavigate()
   const [order, setOrder] = useState(null)
   const [payments, setPayments] = useState([])
@@ -67,8 +69,9 @@ export default function OrderDetail({ designerView = false }) {
     try {
       await api.patch(`/api/orders/${id}/status`, { newStatus })
       await fetchOrder()
+      showToast(`Status updated to ${newStatus}.`, 'success')
     } catch (err) {
-      alert(err.message)
+      showToast(err.message, 'error')
     } finally {
       setStatusLoading(false)
     }
@@ -102,10 +105,7 @@ export default function OrderDetail({ designerView = false }) {
 
   async function handleViewFile(attachment) {
     try {
-      const { data, error } = await supabase.storage
-        .from('order-files')
-        .createSignedUrl(attachment.storage_path, 3600)
-      if (error) throw error
+      const { data } = await api.get(`/api/orders/${id}/files/${attachment.id}/signed-url`)
       if (data?.signedUrl) {
         const ext = attachment.original_filename.split('.').pop().toLowerCase()
         setViewingFile({
@@ -113,9 +113,10 @@ export default function OrderDetail({ designerView = false }) {
           url: data.signedUrl,
           ext,
         })
+        showToast('File preview loaded.', 'success')
       }
     } catch (err) {
-      alert('Error fetching file preview: ' + err.message)
+      showToast('Error fetching file preview: ' + err.message, 'error')
     }
   }
 
@@ -125,7 +126,7 @@ export default function OrderDetail({ designerView = false }) {
     
     // Check file size (max 50MB)
     if (file.size > 50 * 1024 * 1024) {
-      alert('File size exceeds the 50MB limit.')
+      showToast('File size exceeds the 50MB limit.', 'error')
       return
     }
 
@@ -138,9 +139,9 @@ export default function OrderDetail({ designerView = false }) {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
       await fetchOrder()
-      alert('Revision uploaded successfully!')
+      showToast('Revision uploaded successfully!', 'success')
     } catch (err) {
-      alert('Failed to upload revision: ' + err.message)
+      showToast('Failed to upload revision: ' + err.message, 'error')
     } finally {
       setUploadingRevision(false)
     }
@@ -151,16 +152,22 @@ export default function OrderDetail({ designerView = false }) {
       await api.post(`/api/payments/${paymentId}/void`, { reason })
       setVoidModal(null)
       await fetchOrder()
+      showToast('Payment voided successfully.', 'success')
     } catch (err) {
-      alert(err.message)
+      showToast(err.message, 'error')
     }
   }
 
   async function downloadFile(attachment) {
-    const { data } = await supabase.storage
-      .from('order-files')
-      .createSignedUrl(attachment.storage_path, 60)
-    if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+    try {
+      const { data } = await api.get(`/api/orders/${id}/files/${attachment.id}/signed-url`)
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, '_blank')
+        showToast('File download started.', 'success')
+      }
+    } catch (err) {
+      showToast('Error generating download link: ' + err.message, 'error')
+    }
   }
 
   if (loading) return (

@@ -40,10 +40,13 @@ function RoleRouter() {
   return <Navigate to="/staff" replace />
 }
 
+import { ToastProvider } from './contexts/ToastContext'
+
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <ToastProvider>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           <Route path="/login" element={<Login />} />
 
@@ -107,10 +110,11 @@ function App() {
 
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
-  )
-}
+         </Routes>
+       </BrowserRouter>
+      </ToastProvider>
+     </AuthProvider>
+   )
+ }
 
 export default App

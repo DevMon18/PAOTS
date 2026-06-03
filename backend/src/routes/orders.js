@@ -309,3 +309,33 @@ ordersRouter.post('/:id/revision', requireAuth, requireRole('designer', 'staff',
     next(err)
   }
 })
+
+// GET /api/orders/:id/files/:fileId/signed-url — generate a signed url for a layout file
+ordersRouter.get('/:id/files/:fileId/signed-url', requireAuth, async (req, res, next) => {
+  try {
+    const { id, fileId } = req.params
+
+    const { data: file, error: fileErr } = await supabase
+      .from('file_attachments')
+      .select('storage_path')
+      .eq('id', fileId)
+      .eq('order_id', id)
+      .single()
+
+    if (fileErr || !file) {
+      throw Object.assign(new Error('File attachment not found.'), { status: 404 })
+    }
+
+    const { data, error: storageErr } = await supabase.storage
+      .from('order-files')
+      .createSignedUrl(file.storage_path, 3600)
+
+    if (storageErr || !data?.signedUrl) {
+      throw Object.assign(new Error(storageErr?.message || 'Failed to generate signed URL.'), { status: 500 })
+    }
+
+    res.json({ signedUrl: data.signedUrl })
+  } catch (err) {
+    next(err)
+  }
+})
