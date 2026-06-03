@@ -114,10 +114,10 @@ export default function Sidebar() {
         {(role === 'staff' || role === 'manager') && (
           <>
             <span className="nav-label">Counter</span>
-            <NavLink to="/staff" end className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <NavLink to="/staff" end className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setIsOpen(false)}>
               <StaffIcon /> Dashboard
             </NavLink>
-            <NavLink to="/staff/orders/new" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <NavLink to="/staff/orders/new" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setIsOpen(false)}>
               <PlusIcon /> New Order
             </NavLink>
           </>
@@ -127,7 +127,7 @@ export default function Sidebar() {
         {(role === 'designer' || role === 'manager') && (
           <>
             <span className="nav-label">Production</span>
-            <NavLink to="/designer" end className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <NavLink to="/designer" end className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setIsOpen(false)}>
               <QueueIcon /> Design Queue
             </NavLink>
           </>
@@ -137,13 +137,13 @@ export default function Sidebar() {
         {role === 'manager' && (
           <>
             <span className="nav-label">Management</span>
-            <NavLink to="/manager" end className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <NavLink to="/manager" end className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setIsOpen(false)}>
               <ChartIcon /> Reports
             </NavLink>
-            <NavLink to="/manager/inventory" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <NavLink to="/manager/inventory" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setIsOpen(false)}>
               <PackageIcon /> Inventory
             </NavLink>
-            <NavLink to="/manager/users" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <NavLink to="/manager/users" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setIsOpen(false)}>
               <UsersIcon /> Users
             </NavLink>
           </>
@@ -158,7 +158,7 @@ export default function Sidebar() {
             <div className="user-role">{role}</div>
           </div>
         </div>
-        <button className="nav-item" onClick={handleSignOut} style={{ color: '#ef4444' }}>
+        <button className="nav-item" onClick={() => { setIsOpen(false); handleSignOut(); }} style={{ color: '#ef4444' }}>
           <LogOutIcon /> Sign Out
         </button>
       </div>

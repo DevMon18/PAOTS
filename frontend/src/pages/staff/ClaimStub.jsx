@@ -44,7 +44,7 @@ export default function ClaimStub() {
     <div style={{ minHeight: '100vh', background: 'var(--color-bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
 
       {/* Action buttons — hidden on print */}
-      <div className="no-print flex gap-3" style={{ marginBottom: 24 }}>
+      <div className="claim-stub-actions no-print flex gap-3" style={{ marginBottom: 24 }}>
         <button className="btn btn-secondary" onClick={() => navigate(-1)}>← Back</button>
         <button
           id="print-claim-stub-btn"

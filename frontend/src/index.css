@@ -1344,6 +1344,31 @@ input, textarea, select, button { font-family: inherit; }
     -webkit-overflow-scrolling: touch;
   }
 
+  /* Card headers and controls responsiveness */
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: var(--space-3);
+  }
+  .card-header .flex, .card-header .gap-3 {
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start !important;
+  }
+  .search-wrapper, .search-input {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Form actions & Claim stub buttons stack on mobile */
+  .form-actions, .claim-stub-actions {
+    flex-direction: column !important;
+    width: 100% !important;
+  }
+  .form-actions .btn, .claim-stub-actions .btn {
+    width: 100% !important;
+  }
+
   /* Claim Stub print adjustments */
   .claim-stub {
     width: 100% !important;
@@ -1356,6 +1381,43 @@ input, textarea, select, button { font-family: inherit; }
     width: 95% !important;
     max-width: 500px !important;
     margin: var(--space-4) auto !important;
+  }
+
+  /* Progress steps text labels hidden on narrow mobile screens */
+  @media (max-width: 500px) {
+    .step-label {
+      display: none !important;
+    }
+  }
+
+  /* Login page container adjustments */
+  @media (max-width: 480px) {
+    .login-box {
+      padding: var(--space-6) var(--space-4) !important;
+      margin: 0 var(--space-4);
+    }
+  }
+
+  /* Designer queue list item collapses on small screens */
+  @media (max-width: 600px) {
+    .order-queue-item {
+      flex-direction: column;
+      align-items: stretch !important;
+      gap: var(--space-3) !important;
+    }
+    .order-queue-item > div:first-child {
+      width: 100% !important;
+      height: 4px !important;
+      margin-bottom: var(--space-1);
+    }
+    .order-queue-item > div:nth-child(3),
+    .order-queue-item > div:last-child {
+      align-self: flex-start;
+      text-align: left !important;
+    }
+    .order-queue-item > div:last-child {
+      margin-top: var(--space-1);
+    }
   }
 }
 

@@ -483,7 +483,7 @@ export default function NewOrder() {
             </div>
 
             {/* Submit */}
-            <div className="flex gap-4" style={{ justifyContent: 'flex-end' }}>
+            <div className="form-actions flex gap-4" style={{ justifyContent: 'flex-end' }}>
               <button type="button" className="btn btn-secondary btn-lg" onClick={() => navigate('/staff')}>
                 Cancel
               </button>
